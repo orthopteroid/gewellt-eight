@@ -25,4 +25,4 @@ iteration count and one for the character code:
 { 62, '9', { 10,0,23,2,0,9,3,5,7,29,0,17,12,38,7,43,1,34,12,27,11,24,3,19,10,30,26,22,14,24,24,36,7,41,17,44,16,33,0,15,24,42,22,3,25,39,29,19,} }
 ```
 
-![digit movie](https://github.com/orthopteroid/gewellt-eight/digits-8tri.gif "digit movie")
+![digit movie](https://github.com/orthopteroid/gewellt-eight/blob/master/digits-8tri.gif?raw=true "digit movie")
