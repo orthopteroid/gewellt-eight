@@ -45,4 +45,15 @@ The GA used has five parts - each new generation is produced using the following
 
 The crossover approach performs substitution of a contiguous subsection from two mates.
 
+The objective function is calculated as the initial amount of background blue (ie without any triangles) minus
+weighted penalty values. After a triangle-set is drawn (in alpha) the penalities values are summed from
+a sampling of the drawing surface:
 
+* red - the amount of glyph still showing
+* green_over_blue - the amount of unnecessary triangle coverage on the background
+* green_over_green - the amount of overlapping triangles (only possible because we use alpha to draw triangles)
+* badTri - the number of triangles that fail a simple size-test by being too small
+
+The penalties for these terms are typically applied in decreasing weight (ie, red has the higest priority) but
+the code uses a schedule based upon the iteration count to swap the weights between the terms for periods
+of 10 iterations at a time - this appears to create most of the annealing effects you see in the above gif.
