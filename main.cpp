@@ -78,16 +78,54 @@ uint badTri;
 ///////////////////////////////////
 // state vars
 
-static char sprintfBuffer[20];
+static const uint8_t* utf8GlyphsToProcess = (uint8_t*)u8"8"; // utf8 chars
+static const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
+
+static uint8_t* glyphPtr = (uint8_t*)utf8GlyphsToProcess; // pointer to next utf8 char
+static char sprintfBuffer[80];
+static char utf8Buffer[4 +1]; // +1 for \0, static is not threadsafe
 
 int currentMember = 0;
 int iteration = 0;
+FILE *pResultFile = 0;
 
-uint8_t glyphChar = '1';
-uint8_t glyphCharLast = '9';
 GLubyte glyphWidth = 1;
 GLubyte glyphRows = 1;
 GLuint glyphHandle = 0;
+
+//////////////////////
+
+// inc ptr according to length of current utf8 char
+// https://en.wikipedia.org/wiki/UTF-8#Description
+inline int u8_charlength(uint8_t* ptr)
+{
+    if(*ptr == '\0') return 0;
+    int expect = *ptr <= 127 ? 1 : (*ptr <= 223 ? 2 : (*ptr <= 239 ? 3 : (*ptr <= 277 ? 0 : 4)));
+    if(expect == 1) return 1; // fastpath
+
+    // check for misplaced continuation bytes
+    if(expect == 0) return 0; // misplaced continuation byte
+    if(expect >= 2 && (ptr[1] & 192) != 128) return 1; // not a continuation
+    if(expect >= 3 && (ptr[2] & 192) != 128) return 2; // not a continuation
+    if(expect == 4 && (ptr[3] & 192) != 128) return 3; // not a continuation
+    return expect;
+}
+
+char* u8_composeString(uint8_t *ptr)
+{
+    int i=0;
+    while( i < u8_charlength(ptr) ) { utf8Buffer[i] = ptr[i]; i++; }
+    utf8Buffer[i] = 0;
+    return utf8Buffer;
+}
+
+FT_ULong u8_composeLong(uint8_t* ptr)
+{
+    FT_ULong result = 0;
+    auto L = u8_charlength(ptr);
+    for(int i=0; i < L; i++ ) result = (result << 8) + ptr[i];
+    return result;
+}
 
 //////////////////////
 
@@ -125,7 +163,8 @@ uint measure(std::function<uint(uint)> fn)
 
 void texture(bool dump = false)
 {
-    auto glyph_index = FT_Get_Char_Index( ftFace, glyphChar );
+    auto G = u8_composeLong( glyphPtr );
+    auto glyph_index = FT_Get_Char_Index( ftFace, G );
 
     FT_CALL( FT_Load_Glyph( ftFace, glyph_index, FT_LOAD_DEFAULT ) );
     FT_CALL( FT_Render_Glyph( ftFace->glyph, FT_RENDER_MODE_NORMAL ) );
@@ -193,18 +232,19 @@ void key(unsigned char c, int x, int y)
 
     if(c=='S')
     {
-        snprintf(sprintfBuffer, sizeof(sprintfBuffer), "scrot \\%c.png -u", glyphChar);
+        snprintf(sprintfBuffer, sizeof(sprintfBuffer), "scrot \\%s.png -u", u8_composeString( glyphPtr ));
         IGNORE_RESULT(system((const char*) sprintfBuffer));
     }
 
     if(c=='n' || c=='S') // next
     {
         auto p = (GLshort*) &pPop[curPop].data[0];
-        printf("{ %d, '%c', { ", iteration, glyphChar);
-        for(uint v=0;v<numValues;v++) printf("%d,", p[v]);
-        printf("} }\n");
+        fprintf(pResultFile, "{ %d, '%s', { ", iteration, u8_composeString( glyphPtr ) );
+        for(uint v=0;v<numValues;v++) fprintf(pResultFile, "%d,", p[v]);
+        fprintf(pResultFile, "} }\n");
 
-        if(glyphChar == glyphCharLast)
+        glyphPtr += u8_charlength( glyphPtr );
+        if(*glyphPtr == '\0')
             c = 27;
         else
         {
@@ -212,7 +252,6 @@ void key(unsigned char c, int x, int y)
             iteration = 0;
 
             randValue.seed(randSeed());
-            glyphChar++;
             texture();
         }
     }
@@ -225,6 +264,7 @@ void key(unsigned char c, int x, int y)
         delete[] pPop;
         if(pxDist) delete pxDist;
         if(pyDist) delete pyDist;
+        fclose(pResultFile);
         exit( 0 );
     }
 
@@ -484,6 +524,7 @@ int main(int argc, char **argv)
 
     FT_CALL( FT_Init_FreeType( &ftLibrary ) );
     FT_CALL( FT_New_Face( ftLibrary, "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 0, &ftFace ) );
+    FT_CALL( FT_Select_Charmap( ftFace, glyphCharmap) );
     FT_CALL( FT_Set_Pixel_Sizes( ftFace, 0, texDensity ) );
 
     glutInit(&argc,argv);
@@ -510,8 +551,10 @@ int main(int argc, char **argv)
 
     glutDisplayFunc(display);
     glutKeyboardFunc(key);
-
     glutIdleFunc(idle);
+
+    pResultFile = fopen("results.txt", "wa");
+
     glutMainLoop();
 
     return(0);
