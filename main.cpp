@@ -339,8 +339,8 @@ void idle()
         // quick check for tris that share cords - and are likely zero size
         badTri = 0;
         auto p = (GLshort*) &pPop[curPop].data[currentMember];
-        for( uint16_t v = 2; v < numValues; v++ )
-            badTri += (abs(p[v-2] - p[v]) < 2) || (abs(p[v-1] - p[v]) < 2) ? 1 : 0;
+        for( uint16_t v = 1; v < numValues; v++ )
+            badTri += (abs(p[v-1] - p[v]) < 2) ? 1 : 0;
 
         uint penalities = a * red + b * green_over_blue + c * green_over_green + d * badTri;
         if( penalities > blue ) penalities = penalities >> 1;
@@ -353,7 +353,7 @@ void idle()
     if(currentMember == -1)
     {
         // check for termination and restart
-        if(red < 40 && green_over_blue < 40 && badTri < 2) key('S',0,0); // pixel tolerances
+        if(red < 40 && green_over_blue < 50 && badTri < 2) key('S',0,0); // pixel tolerances
         if(iteration > 100) key('r',0,0);
 
         uint8_t newPop = curPop ? uint8_t(0) : uint8_t(1); // other pop
