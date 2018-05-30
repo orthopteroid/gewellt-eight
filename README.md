@@ -2,24 +2,24 @@
 
 'Gewellt' meaning 'wrinkly'... this code uses a genetic algorithim to optimize coverage of eight triangles
 onto a font glyph. The glyph is drawn onto an opengl 1.3 texture which is then drawn onto a back buffer along with 
-the candidate triangles. Alpha blending is used to determine coefficients for the objective function; a kind of
+the candidate coverage triangles. Alpha blending is used to determine coefficients for the objective function; a kind of
 poor-man's opencl. This approach creates 'wrinkly' but compact glyphs - about 50 bytes for an scalable opengl glyph.
 
-The genetic algorithim switches the weights on the objective function coefficients according to a simple
+The genetic algorithm switches the weights on the objective function coefficients according to a simple
 schedule. Combined with some unique operators (like position adjustment) this appears to simulate an
 annealing or relaxation method.
 
-When match tolerances become low enough, the match is saved to a .png and the triangles positions are
-emmitted. With triangle cordinates being only byte-values this makes 48 bytes per glyph, plus one for
+When matched tolerances become low enough, the drawing buffer is saved to a .png and the triangle positions are
+emmitted. With triangle coordinates being only byte-values this makes 48 bytes per glyph, plus one for
 iteration count and one for the character code:
 
-The code was run for the digits 1 thorough 9 semi-automously, meaning that I sat there watching and if it looks
+The code was run for the digits 1 thorough 9 semi-autonomously, meaning that I sat there watching and if it looks
 like it got stuck I would hit 'r' (to fully reset or reseed), hit 'm' (to slightly mutate) or hit 'n' (to
 move onto the next glyph). 
 
 ![digit movie](https://github.com/orthopteroid/gewellt-eight/blob/master/digits-8tri.gif?raw=true "digit movie")
 
-When it auto-completed or when I hit 'n' the coe would produce the list of triangles reached to this point:
+When it auto-completed or when I hit 'n' the code would produce the list of triangles reached to this point.
 
 ```
 { 77, '1', { 25,23,21,13,19,7,16,13,31,28,16,12,12,1,17,39,21,0,0,11,12,9,5,6,11,2,28,13,25,11,31,41,18,34,0,41,10,2,13,17,11,7,14,21,27,9,15,20,} }
@@ -46,7 +46,7 @@ The GA used has five parts - each new generation is produced using the following
 The crossover approach performs substitution of a contiguous subsection from two mates.
 
 The objective function is calculated as the initial amount of background blue (ie without any triangles) minus
-weighted penalty values. After a triangle-set is drawn (in alpha) the penalities values are summed from
+weighted penalty values. After a triangle-set is drawn (in alpha) the penality values are summed from
 a sampling of the drawing surface:
 
 * red - the amount of glyph still showing
