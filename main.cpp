@@ -41,9 +41,6 @@ const int resolution = 64; // a power of 2 <= 256, but 64 might be a more reason
 const int texDensity = resolution, texSize = texDensity * texDensity;
 const int viewDensity = texDensity -1, viewSize = viewDensity * viewDensity;
 
-struct Texel { GLubyte l, a; }; // luminance & alpha
-static Texel texPixels[ texSize ];
-
 const int popSize = 200;
 const int numTris = 8;
 const int numPoints = numTris * 3;
@@ -137,6 +134,9 @@ void texture(bool dump = false)
 
     if(pyDist) delete pyDist;
     pyDist = new std::uniform_int_distribution<GLshort>(0, glyphRows);
+
+    struct Texel { GLubyte l, a; }; // luminance & alpha
+    static Texel texPixels[ texSize ];
 
     // Note: two channel bitmap (One for channel luminosity and one for alpha)
     memset(texPixels,0,sizeof(texPixels));
@@ -324,12 +324,14 @@ void idle()
         uint a = 5, b = 3, c = 2, d = 1;
 
         // weight permutations allow annealing
-        int batch = (iteration % 121) / 10 / 2; // [0,120] -> [0,12] in blocks of 9 -> [0,6] in blocks of 9
+        int batch = (iteration % 121) / 10 / 2; // [0,120] -> [0,12] in blocks of 10 -> [0,6] in blocks of 10
         switch( batch )
         {
+            // put deflates together
             case 1: std::swap(a,b); break; // prefer background coverage to glyph coverage -> deflate
-            case 2: std::swap(a,d); break; // perfer 'better triangles' to glyph coverage -> inflate
-            case 3: std::swap(a,c); break; // perfer less triangle overlap to glyph coverage -> deflate
+            case 2: std::swap(a,c); break; // perfer less triangle overlap to glyph coverage -> deflate
+            // put inflates together
+            case 3: std::swap(a,d); break; // perfer 'better triangles' to glyph coverage -> inflate
             case 4: std::swap(b,d); break; // perfer 'better triangles' to background coverage -> inflate
             default: ;
         }
