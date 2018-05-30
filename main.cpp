@@ -78,7 +78,6 @@ uint badTri;
 ///////////////////////////////////
 // state vars
 
-uint8_t curPop = 0;
 static char sprintfBuffer[20];
 
 int currentMember = 0;
@@ -174,6 +173,8 @@ static bool mutaterequest = false;
 
 void key(unsigned char c, int x, int y)
 {
+    uint curPop = iteration & 1;
+
     if(c=='r') // reset
     {
         currentMember = (popSize-1);
@@ -230,6 +231,8 @@ void key(unsigned char c, int x, int y)
 
 void display(void)
 {
+    uint curPop = iteration & 1;
+
     // background blue
     glClearColor(0,0,1,1);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -313,6 +316,9 @@ void display(void)
 
 void idle()
 {
+    uint curPop = iteration & 1;
+    uint newPop = ~iteration & 1;
+
     // check for seed-phase
     if(iteration==0 && currentMember==(popSize-1))
     {
@@ -360,8 +366,6 @@ void idle()
         if(red < 40 && green_over_blue < 50 && badTri < 2) key('S',0,0); // pixel tolerances
         if(iteration > 100) key('r',0,0);
 
-        uint8_t newPop = curPop ? uint8_t(0) : uint8_t(1); // other pop
-
         // isolate best
         uint16_t bt = 0;
         uint bv = 0;
@@ -375,8 +379,6 @@ void idle()
             auto p0 = (GLshort *) &pPop[curPop].data[0];
             for( uint16_t v = 0; v < numValues; v++ ) p0[v] = pbt[v];
         }
-
-        iteration++;
 
         // clear best and clones
         for(uint16_t t=0;t<popSize;t++)
@@ -463,7 +465,7 @@ void idle()
             RANDOMTRI( (GLshort *) &pPop[newPop].data[t] );
 
         currentMember = (popSize-1);
-        curPop = newPop;
+        iteration++;
     }
 
     glutPostRedisplay();
