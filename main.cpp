@@ -375,15 +375,15 @@ void idle()
         uint a = 5, b = 3, c = 2, d = 1;
 
         // weight permutations allow annealing
-        int batch = (iteration % 121) / 10 / 2; // [0,120] -> [0,12] in blocks of 10 -> [0,6] in blocks of 20
+        int batch = (iteration % 51) / 10; // [0,50] -> [0,5] in blocks of 10
         switch( batch )
         {
-            // put deflates together
+            case 0: std::swap(b,d); break; // perfer 'better triangles' to background coverage -> inflate
             case 1: std::swap(a,b); break; // prefer background coverage to glyph coverage -> deflate
-            case 2: std::swap(a,c); break; // perfer less triangle overlap to glyph coverage -> deflate
-            // put inflates together
+            // gap
             case 3: std::swap(a,d); break; // perfer 'better triangles' to glyph coverage -> inflate
-            case 4: std::swap(b,d); break; // perfer 'better triangles' to background coverage -> inflate
+            case 4: std::swap(a,c); break; // perfer less triangle overlap to glyph coverage -> deflate
+            // gap
             default: ;
         }
 
@@ -403,9 +403,8 @@ void idle()
     // check for breed-phase
     if(currentMember == -1)
     {
-        // check for termination and restart
-        if(red < 40 && green_over_blue < 50 && badTri < 2) key('S',0,0); // pixel tolerances
-        if(iteration > 100) key('r',0,0);
+        if(iteration % 10 == 0) printf("%3d: %d %d %d %d %d\n", iteration, blue, red, green_over_blue, green_over_green, badTri);
+        if(iteration == 200) { key('S',0,0); return; } // complete after 200
 
         // isolate best
         uint16_t bt = 0;
@@ -497,7 +496,7 @@ void idle()
         for(uint16_t m=1;m<popSize / 20;m++)
         {
             auto t = (randValue() % (popSize*4/5 -1)) +1; // -1 includes range end, +1 skips [0]
-            RANDPOS( (GLshort*) &pPop[newPop].data[t], randValue() % numValues );
+            RANDPOS( (GLshort*) &pPop[newPop].data[t], uint(randValue() % numValues) );
         }
 
         // remainder are random
