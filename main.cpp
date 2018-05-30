@@ -34,6 +34,9 @@ FT_Error ftError;
 FT_Library ftLibrary;
 FT_Face ftFace;
 
+// when using -Wall unused return values make for chatty logs...
+#define IGNORE_RESULT(fn) if (fn)
+
 std::random_device r;
 std::mt19937 mtRand(r());
 
@@ -76,6 +79,8 @@ uint badTri;
 // state vars
 
 uint8_t curPop = 0;
+static char sprintfBuffer[20];
+
 int currentMember = 0;
 int iteration = 0;
 
@@ -187,9 +192,8 @@ void key(unsigned char c, int x, int y)
 
     if(c=='S')
     {
-        char sz[20];
-        snprintf(sz, 20, "scrot \\%c.png -u", glyphChar);
-        system((const char*) sz);
+        snprintf(sprintfBuffer, sizeof(sprintfBuffer), "scrot \\%c.png -u", glyphChar);
+        IGNORE_RESULT(system((const char*) sprintfBuffer));
     }
 
     if(c=='n' || c=='S') // next
@@ -324,7 +328,7 @@ void idle()
         uint a = 5, b = 3, c = 2, d = 1;
 
         // weight permutations allow annealing
-        int batch = (iteration % 121) / 10 / 2; // [0,120] -> [0,12] in blocks of 10 -> [0,6] in blocks of 10
+        int batch = (iteration % 121) / 10 / 2; // [0,120] -> [0,12] in blocks of 10 -> [0,6] in blocks of 20
         switch( batch )
         {
             // put deflates together
