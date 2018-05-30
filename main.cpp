@@ -37,8 +37,8 @@ FT_Face ftFace;
 // when using -Wall unused return values make for chatty logs...
 #define IGNORE_RESULT(fn) if (fn)
 
-std::random_device r;
-std::mt19937 mtRand(r());
+std::random_device randSeed;
+std::default_random_engine randValue(randSeed());
 
 const int resolution = 64; // a power of 2 <= 256, but 64 might be a more reasonable number
 const int texDensity = resolution, texSize = texDensity * texDensity;
@@ -93,7 +93,7 @@ GLuint glyphHandle = 0;
 
 inline void RANDPOS(GLshort* p, uint v)
 {
-    p[v] = GLshort(mtRand() % ( (v & 1) ? glyphRows : glyphWidth) );
+    p[v] = GLshort(randValue() % ( (v & 1) ? glyphRows : glyphWidth) );
 }
 
 inline void ADJPOS(GLshort* p, uint v)
@@ -101,7 +101,7 @@ inline void ADJPOS(GLshort* p, uint v)
     p[v] = std::min<GLshort>(
         std::max<GLshort>(
             0,
-            p[v] + GLshort(mtRand() % 11) -5 // [-5,+5]
+            p[v] + GLshort(randValue() % 11) -5 // [-5,+5]
         ),
         GLshort( (v & 1) ? glyphRows : glyphWidth)
     );
@@ -111,8 +111,8 @@ inline void RANDOMTRI(GLshort* p)
 {
     for( uint16_t v = 0; v < numValues / 2; v++ )
     {
-        p[v * 2 + 0] = (*pxDist)(mtRand);
-        p[v * 2 + 1] = (*pyDist)(mtRand);
+        p[v * 2 + 0] = (*pxDist)(randValue);
+        p[v * 2 + 1] = (*pyDist)(randValue);
     }
 }
 
@@ -211,6 +211,7 @@ void key(unsigned char c, int x, int y)
             currentMember = ( popSize - 1 );
             iteration = 0;
 
+            randValue.seed(randSeed());
             glyphChar++;
             texture();
         }
@@ -403,19 +404,18 @@ void idle()
                 if(s1 > 0) { s1 -= pPop[curPop].value[ tt ]; t1 = tt; }
                 if(s2 > 0) { s2 -= pPop[curPop].value[ tt ]; t2 = tt; }
             }
-            if(mtRand() & 1) std::swap( t1, t2 );
+            if(randValue() & 1) std::swap( t1, t2 );
 
+            // copy
             auto pt0 = (GLshort*) &pPop[newPop].data[t0];
             auto pt1 = (GLshort*) &pPop[curPop].data[t1];
-            auto pt2 = (GLshort*) &pPop[curPop].data[t2];
+            for( uint16_t v = 0; v < numValues; v++ ) pt0[v] = pt1[v];
 
-            // 3 piece merge
-            uint16_t cut1 = uint16_t(mtRand() % numValues);
-            uint16_t cut2 = uint16_t(mtRand() % numValues);
-            if(cut1 > cut2) std::swap(cut1,cut2);
-            for( uint16_t v = 0; v < cut1; v++ )         pt0[v] = pt1[v];
-            for( uint16_t v = cut1; v < cut2; v++ )      pt0[v] = pt2[v];
-            for( uint16_t v = cut2; v < numValues; v++ ) pt0[v] = pt1[v];
+            // merge
+            auto pt2 = (GLshort*) &pPop[curPop].data[t2];
+            auto start = uint16_t(randValue() % numValues);
+            auto length = uint16_t(randValue() % (numValues - start));
+            for( uint16_t v = start; v < (start+length); v++ ) pt0[v] = pt2[v];
         };
 
         // mutate curPop[0], the main source of the new population
@@ -425,7 +425,7 @@ void idle()
 
             auto p = (GLshort*) &pPop[curPop].data[0];
             for(uint16_t i=0;i<3; i++)
-                RANDPOS(p, uint( mtRand() % numValues ) );
+                RANDPOS(p, uint( randValue() % numValues ) );
         }
 
         // copy best
@@ -442,22 +442,22 @@ void idle()
             auto p = (GLshort*) &pPop[newPop].data[t];
             for( uint16_t v = 0; v < numValues; v++ ) p[v] = p0[v];
             for(uint16_t i=0;i<3; i++)
-                ADJPOS(p, uint(mtRand() % numValues));
+                ADJPOS(p, uint(randValue() % numValues));
         }
 
         // breed best
         for(uint16_t t=popSize/4;t<popSize/2;t++)
-            fnCrossover(t, 0, uint(mtRand() % sump1) );
+            fnCrossover(t, 0, uint(randValue() % sump1) );
 
         // breed others
         for(uint16_t t=popSize/2;t<popSize*4/5;t++)
-            fnCrossover(t, uint(mtRand() % sump1), uint(mtRand() % sump1) );
+            fnCrossover(t, uint(randValue() % sump1), uint(randValue() % sump1) );
 
         // mutations
         for(uint16_t m=1;m<popSize / 20;m++)
         {
-            auto t = (mtRand() % (popSize*4/5 -1)) +1; // -1 includes range end, +1 skips [0]
-            RANDPOS( (GLshort*) &pPop[newPop].data[t], mtRand() % numValues );
+            auto t = (randValue() % (popSize*4/5 -1)) +1; // -1 includes range end, +1 skips [0]
+            RANDPOS( (GLshort*) &pPop[newPop].data[t], randValue() % numValues );
         }
 
         // remainder are random
