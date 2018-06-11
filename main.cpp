@@ -28,11 +28,17 @@
 #include <random>
 #include FT_FREETYPE_H
 
+static const uint8_t* utf8GlyphsToProcess = (uint8_t*)u8".?!-#% 0123456789abcdefghijklmnopqrstuvwxyz"; // utf8 chars
+static const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
+
+////////////////////////////////////////////
+
 FT_Error ftError;
 #define FT_CALL(x) do { ftError = (x); assert(!ftError); } while(false)
 
 FT_Library ftLibrary;
 FT_Face ftFace;
+FT_Glyph_Metrics glyphMetrics;
 
 // when using -Wall unused return values make for chatty logs...
 #define IGNORE_RESULT(fn) if (fn)
@@ -44,7 +50,7 @@ const int resolution = 64; // a power of 2 <= 256, but 64 might be a more reason
 const int texDensity = resolution, texSize = texDensity * texDensity;
 const int viewDensity = texDensity -1, viewSize = viewDensity * viewDensity;
 
-const int popSize = 200;
+const int popSize = 400;
 const int numTris = 8;
 const int numPoints = numTris * 3;
 const int numValues = numPoints * 2;
@@ -77,9 +83,6 @@ uint badTri;
 
 ///////////////////////////////////
 // state vars
-
-static const uint8_t* utf8GlyphsToProcess = (uint8_t*)u8"8"; // utf8 chars
-static const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
 
 static uint8_t* glyphPtr = (uint8_t*)utf8GlyphsToProcess; // pointer to next utf8 char
 static char sprintfBuffer[80];
@@ -171,6 +174,18 @@ void texture(bool dump = false)
 
     glyphWidth = ftFace->glyph->bitmap.width;
     glyphRows = ftFace->glyph->bitmap.rows;
+    glyphMetrics = ftFace->glyph->metrics;
+
+    // https://www.freetype.org/freetype2/docs/tutorial/step2.html
+    // convert metrics to pixels
+    glyphMetrics.width /= 64;
+    glyphMetrics.height /= 64;
+    glyphMetrics.horiBearingX /= 64;
+    glyphMetrics.horiBearingY /= 64;
+    glyphMetrics.horiAdvance /= 64;
+    glyphMetrics.vertBearingX /= 64;
+    glyphMetrics.vertBearingY /= 64;
+    glyphMetrics.vertAdvance /= 64;
 
     if(pxDist) delete pxDist;
     pxDist = new std::uniform_int_distribution<GLshort>(0, glyphWidth);
@@ -178,10 +193,8 @@ void texture(bool dump = false)
     if(pyDist) delete pyDist;
     pyDist = new std::uniform_int_distribution<GLshort>(0, glyphRows);
 
-    struct Texel { GLubyte l, a; }; // luminance & alpha
-    static Texel texPixels[ texSize ];
+    struct Texel { GLubyte l, a; } texPixels[ texSize ]; // luminance & alpha
 
-    // Note: two channel bitmap (One for channel luminosity and one for alpha)
     memset(texPixels,0,sizeof(texPixels));
     for(uint j = 0; j < ftFace->glyph->bitmap.rows; j++)
         for(uint i = 0; i < ftFace->glyph->bitmap.width; i++)
@@ -203,6 +216,19 @@ void texture(bool dump = false)
             putchar( '\n' );
         }
     }
+}
+
+void dumpGewelltGlyph(uint curPop)
+{
+    fprintf( pResultFile, "{ '%s', ", u8_composeString( glyphPtr ));
+    putc('{', pResultFile);
+    auto pMetrics = (FT_Pos*)&glyphMetrics;
+    for(uint m = 0; m < 8; m++ ) fprintf( pResultFile, "%d,", int(pMetrics[m]) );
+    fprintf( pResultFile, "}, {" );
+    auto pValues = (GLshort *) &pPop[curPop].data[0];
+    for( uint v = 0; v < numValues; v++ ) fprintf( pResultFile, "%d,", pValues[v] );
+    fprintf( pResultFile, "} }\n" );
+    fflush(pResultFile);
 }
 
 //////////////////////////////////////
@@ -238,10 +264,7 @@ void key(unsigned char c, int x, int y)
 
     if(c=='n' || c=='S') // next
     {
-        auto p = (GLshort*) &pPop[curPop].data[0];
-        fprintf(pResultFile, "{ %d, '%s', { ", iteration, u8_composeString( glyphPtr ) );
-        for(uint v=0;v<numValues;v++) fprintf(pResultFile, "%d,", p[v]);
-        fprintf(pResultFile, "} }\n");
+        dumpGewelltGlyph( curPop );
 
         glyphPtr += u8_charlength( glyphPtr );
         if(*glyphPtr == '\0')
@@ -404,7 +427,7 @@ void idle()
     if(currentMember == -1)
     {
         if(iteration % 10 == 0) printf("%3d: %d %d %d %d %d\n", iteration, blue, red, green_over_blue, green_over_green, badTri);
-        if(iteration == 200) { key('S',0,0); return; } // complete after 200
+        if(iteration == 500) { key('S',0,0); return; }
 
         // isolate best
         uint16_t bt = 0;
