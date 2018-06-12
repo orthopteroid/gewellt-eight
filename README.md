@@ -1,47 +1,45 @@
 # gewellt-eight
 
 'Gewellt' meaning 'wrinkly'... this code uses a genetic algorithim to optimize coverage of eight triangles
-onto a font glyph. The glyph is drawn onto an opengl 1.3 texture which is then drawn onto a back buffer along with 
+onto a font glyph. The glyph is drawn onto an opengl texture which is then drawn onto a back buffer along with 
 the candidate coverage triangles. Alpha blending is used to determine coefficients for the objective function; a kind of
-poor-man's opencl. This approach creates 'wrinkly' but compact glyphs - about 50 bytes for an scalable opengl glyph.
+poor-man's opencl. This approach creates 'wrinkly' but compact glyphs - about 56 bytes for an scalable opengl glyph.
 
 The genetic algorithm switches the weights on the objective function coefficients according to a simple
 schedule. Combined with some unique operators (like position adjustment) this appears to simulate an
 annealing or relaxation method.
 
-When matched tolerances become low enough, the drawing buffer is saved to a .png and the triangle positions are
-emmitted. With triangle coordinates being only byte-values this makes 48 bytes per glyph, plus one for
-iteration count and one for the character code:
-
-The code was run for the digits 1 thorough 9 semi-autonomously, meaning that I sat there watching and if it looks
-like it got stuck I would hit 'r' (to fully reset or reseed), hit 'm' (to slightly mutate) or hit 'n' (to
-move onto the next glyph). 
+After 200 iterations, the drawing buffer is saved to a .png and the triangle positions are
+emmitted. With triangle coordinates being only byte-values this makes 48 bytes per glyph, plus the character code
+and the glyph offset information.
 
 ![digit movie](https://github.com/orthopteroid/gewellt-eight/blob/master/digits-8tri.gif?raw=true "digit movie")
 
-When it auto-completed or when I hit 'n' the code would produce the list of triangles reached to this point.
+```
+{ '1', {31,42,4,42,38,-15,4,51,}, {17,33,31,41,0,41,0,11,0,7,4,11,21,28,14,34,14,12,8,11,8,11,18,10,1,11,2,6,1,8,0,8,13,4,7,11,19,0,11,0,20,26,7,0,17,0,11,0,} }
+{ '2', {29,43,5,43,38,-14,4,51,}, {29,0,6,4,10,0,0,37,3,43,27,11,22,2,25,11,27,7,20,36,4,42,29,42,12,2,25,11,22,2,29,8,29,0,29,6,1,11,2,5,16,2,20,12,25,11,25,15,} }
+{ '3', {30,44,4,43,38,-15,3,51,}, {10,2,15,2,8,3,17,4,6,3,2,8,27,16,28,7,20,17,30,28,12,44,26,40,5,7,10,7,0,11,30,10,22,1,7,1,29,30,20,17,10,21,0,32,14,41,8,42,} }
+{ '4', {32,42,3,42,38,-16,4,51,}, {1,30,1,30,17,35,14,17,14,17,21,41,32,30,24,33,25,27,20,7,24,42,20,37,24,38,24,33,24,35,20,6,24,40,26,1,20,0,27,0,8,19,2,33,0,29,18,2,} }
+{ '5', {30,43,4,42,38,-15,4,51,}, {30,37,25,17,21,21,7,18,14,27,1,10,0,31,3,39,19,43,10,16,5,22,25,17,27,30,13,42,27,38,8,6,26,3,23,0,5,24,7,6,2,11,22,0,3,0,2,9,} }
+```
 
-```
-{ 77, '1', { 25,23,21,13,19,7,16,13,31,28,16,12,12,1,17,39,21,0,0,11,12,9,5,6,11,2,28,13,25,11,31,41,18,34,0,41,10,2,13,17,11,7,14,21,27,9,15,20,} }
-{ 65, '2', { 17,37,3,3,10,20,7,34,26,16,28,14,23,36,22,36,19,33,24,21,18,0,27,6,1,8,21,3,8,0,3,43,0,37,29,39,29,0,22,11,24,8,26,13,0,37,8,36,} }
-{ 65, '3', { 11,19,17,0,9,25,26,9,7,0,26,2,13,0,5,14,4,4,0,32,8,44,16,40,29,29,13,44,28,38,13,33,15,35,26,44,28,30,17,18,11,21,27,5,18,21,27,17,} }
-{ 54, '4', { 25,0,12,10,10,16,0,33,0,27,25,29,13,27,29,41,12,26,19,30,29,27,22,42,15,34,26,0,22,12,21,0,19,33,26,21,16,9,6,28,1,26,21,29,4,41,24,27,} }
-{ 52, '5', { 21,5,20,8,14,25,1,22,3,0,10,22,30,4,30,4,18,15,23,5,27,0,0,3,21,40,8,42,0,33,26,15,21,43,29,32,8,16,27,25,22,16,8,32,0,19,9,34,} }
-{ 45, '6', { 26,33,8,25,19,30,4,18,27,22,19,15,27,4,17,4,24,11,7,7,8,0,25,2,0,18,7,2,4,43,26,34,9,41,21,42,25,40,20,17,29,28,4,38,10,42,6,31,} }
-{ 51, '7', { 13,34,18,13,16,20,3,35,26,18,15,26,28,0,21,4,13,35,29,39,11,42,11,42,29,6,8,27,21,14,4,0,0,4,24,4,12,42,7,38,17,13,6,31,6,30,4,21,} }
-{ 69, '8', { 0,36,11,44,26,40,5,20,0,31,5,39,10,14,12,22,14,30,27,19,17,0,27,5,6,7,0,13,8,21,30,35,22,13,23,40,7,1,0,10,22,1,9,17,23,20,5,25,} }
-{ 62, '9', { 10,0,23,2,0,9,3,5,7,29,0,17,12,38,7,43,1,34,12,27,11,24,3,19,10,30,26,22,14,24,24,36,7,41,17,44,16,33,0,15,24,42,22,3,25,39,29,19,} }
-```
+![digit](https://github.com/orthopteroid/gewellt-eight/blob/master/1.png?raw=true "digit")
+![digit](https://github.com/orthopteroid/gewellt-eight/blob/master/2.png?raw=true "digit")
+![digit](https://github.com/orthopteroid/gewellt-eight/blob/master/3.png?raw=true "digit")
+![digit](https://github.com/orthopteroid/gewellt-eight/blob/master/4.png?raw=true "digit")
+![digit](https://github.com/orthopteroid/gewellt-eight/blob/master/5.png?raw=true "digit")
 
 # The Genetic Algorithim
 
-The GA used has five parts - each new generation is produced using the following steps:
+The GA used has seven parts - each new generation is produced using the following steps:
 
-* preserve best 
-* copy best with limited-distance random position adjustments
+* preserve best
+* combine best with one random vertex join between the 8 triangles
+* combine best with limited-distance random vertex position adjustments
+* combine best with limited-distance random triangle shifts
 * crossover the best with any likely candidate from the previous generation
 * unconstrained crossover with any likely candidates
-* random generation
+* combine the best with any 2 randomly generated triangles
 
 The crossover approach performs substitution of a contiguous subsection from two mates.
 

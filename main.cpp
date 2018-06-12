@@ -28,8 +28,11 @@
 #include <random>
 #include FT_FREETYPE_H
 
-static const uint8_t* utf8GlyphsToProcess = (uint8_t*)u8".?!-#% 0123456789abcdefghijklmnopqrstuvwxyz"; // utf8 chars
-static const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
+const int numTris = 8; // 8 tris, hence the name...
+const int popSize = 200;
+const char* szFont = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
+const uint8_t* u8zGlyphs = (uint8_t*)u8"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.?!-#%";
+const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
 
 ////////////////////////////////////////////
 
@@ -39,6 +42,10 @@ FT_Error ftError;
 FT_Library ftLibrary;
 FT_Face ftFace;
 FT_Glyph_Metrics glyphMetrics;
+
+uint8_t glyphWidth = 1;
+uint8_t glyphRows = 1;
+GLuint glyphHandle = 0;
 
 // when using -Wall unused return values make for chatty logs...
 #define IGNORE_RESULT(fn) if (fn)
@@ -50,20 +57,133 @@ const int resolution = 64; // a power of 2 <= 256, but 64 might be a more reason
 const int texDensity = resolution, texSize = texDensity * texDensity;
 const int viewDensity = texDensity -1, viewSize = viewDensity * viewDensity;
 
-const int popSize = 400;
-const int numTris = 8;
 const int numPoints = numTris * 3;
 const int numValues = numPoints * 2;
 
-struct Triangle { GLshort v[6]; }; // 6 values per tiangle
+struct Population; // fwd ref
+
+struct Triangle
+{
+    GLshort t[ 2 * 3 ]; // 3 sets of 2 cords
+
+    inline Triangle& copy(Triangle& src)
+    {
+        memcpy( t, src.t, sizeof(Triangle) );
+        return *this;
+    }
+    inline void adjust(uint16_t d)
+    {
+        auto d2p1 = d * 2 + 1;
+        auto ic = randValue() % 3;
+        t[ic*2+0] = std::min<GLshort>( std::max<GLshort>( t[ic*2+0] + randValue() % d2p1 - d, 0 ), glyphWidth );
+        t[ic*2+1] = std::min<GLshort>( std::max<GLshort>( t[ic*2+1] + randValue() % d2p1 - d, 0 ), glyphRows );
+    }
+    inline void shift(uint16_t d)
+    {
+        auto d2p1 = d * 2 + 1;
+        auto qx = randValue() % d2p1 - d;
+        auto qy = randValue() % d2p1 - d;
+
+        for( uint16_t i=0; i<3; i++)
+        {
+            t[i * 2 + 0] = std::min<GLshort>( std::max<GLshort>( t[i * 2 + 0] + qx, 0 ), glyphWidth );
+            t[i * 2 + 1] = std::min<GLshort>( std::max<GLshort>( t[i * 2 + 1] + qy, 0 ), glyphRows );
+        }
+    }
+    inline void random()
+    {
+        for( uint16_t i=0; i<3; i++)
+        {
+            t[i * 2 + 0] = GLshort(randValue() % glyphWidth);
+            t[i * 2 + 1] = GLshort(randValue() % glyphRows);
+        }
+    }
+};
+struct TriangleSet
+{
+    Triangle ts[ numTris ];
+
+    inline TriangleSet& copy(TriangleSet& src)
+    {
+        memcpy( ts, src.ts, sizeof(TriangleSet) );
+        return *this;
+    }
+    inline void merge(TriangleSet &src, uint8_t tsrc)
+    {
+        ts[tsrc].copy( src.ts[tsrc] );
+    }
+    inline void adjust(uint16_t n, uint16_t d) // adjust n points by +/- d
+    {
+        for(uint16_t i=0;i<n; i++) ts[randValue() % numTris].adjust( d );
+    }
+    inline void shift(uint16_t n, uint16_t d)
+    {
+        for(uint16_t i=0;i<n; i++) ts[randValue() % numTris].shift( d );
+    }
+    inline void random(uint16_t n)
+    {
+        for(uint16_t i=0;i<n; i++) ts[randValue() % numTris].random();
+    }
+    inline void random()
+    {
+        for(uint16_t i=0;i<numTris; i++) ts[i].random();
+    }
+    inline void join()
+    {
+        uint32_t r = uint32_t(randValue()); // call reduction
+        auto t1 = r % numTris;
+        auto t2 = (r >> 8) % numTris;
+        auto v1 = (r >> 16) % 3; // [0,2]
+        auto v2 = (r >> 24) % 3;
+
+        ts[t2].t[v2*2+0] = ts[t1].t[v1*2+0]; // dup vert to join tris
+        ts[t2].t[v2*2+1] = ts[t1].t[v1*2+1];
+    }
+    void crossover(Population& src, uint ms1, uint ms2);
+};
 struct Population {
-    Triangle data[ popSize ][ numTris ];
+    TriangleSet data[ popSize ];
     uint value[ popSize ];
+
+    inline void scan(uint16_t &iBest, uint &vBest, uint &vSum)
+    {
+        vBest = 0; iBest = 0;
+        for( uint16_t i = 0; i < popSize; i++ )
+        {
+            if( value[i] > vBest ) vBest = value[iBest = i];
+        }
+
+        // clear best and clones and make sum
+        vSum = 0;
+        for(uint16_t i=0; i<popSize; i++)
+        {
+            if( value[i] == vBest ) value[i] = 0;
+            vSum += value[ i ];
+        }
+        vSum++; // +1 will put % operator in range of [0,sum]
+    }
+    inline void sum(uint16_t& m1, uint16_t& m2, uint ms1, uint ms2)
+    {
+        // scan and switch
+        m1 = m2 = 0;
+        for(uint16_t i=0; i<popSize; i++)
+        {
+            if(ms1 > 0) { ms1 -= value[ i ]; m1 = i; }
+            if(ms2 > 0) { ms2 -= value[ i ]; m2 = i; }
+        }
+    };
 };
 Population* pPop = 0;
 
-std::uniform_int_distribution<GLshort> *pxDist = 0;
-std::uniform_int_distribution<GLshort> *pyDist = 0;
+// for code cleanliness, this is better in TriangleSet than in Population
+void TriangleSet::crossover(Population& src, uint ms1, uint ms2)
+{
+    uint16_t m1, m2;
+    src.sum(m1,m2,ms1,ms2);
+    if(randValue() & 1) std::swap( m1, m2 );
+
+    copy( src.data[m1] ).merge( src.data[m2], uint8_t( randValue() % numTris ));
+};
 
 //////////////////////////////////
 // objective function state
@@ -84,17 +204,13 @@ uint badTri;
 ///////////////////////////////////
 // state vars
 
-static uint8_t* glyphPtr = (uint8_t*)utf8GlyphsToProcess; // pointer to next utf8 char
+static uint8_t* u8Glyph = (uint8_t*)u8zGlyphs; // pointer to next utf8 char
 static char sprintfBuffer[80];
 static char utf8Buffer[4 +1]; // +1 for \0, static is not threadsafe
 
-int currentMember = 0;
-int iteration = 0;
+uint currentMember = 0;
+uint iteration = 0;
 FILE *pResultFile = 0;
-
-GLubyte glyphWidth = 1;
-GLubyte glyphRows = 1;
-GLuint glyphHandle = 0;
 
 //////////////////////
 
@@ -132,31 +248,6 @@ FT_ULong u8_composeLong(uint8_t* ptr)
 
 //////////////////////
 
-inline void RANDPOS(GLshort* p, uint v)
-{
-    p[v] = GLshort(randValue() % ( (v & 1) ? glyphRows : glyphWidth) );
-}
-
-inline void ADJPOS(GLshort* p, uint v)
-{
-    p[v] = std::min<GLshort>(
-        std::max<GLshort>(
-            0,
-            p[v] + GLshort(randValue() % 11) -5 // [-5,+5]
-        ),
-        GLshort( (v & 1) ? glyphRows : glyphWidth)
-    );
-}
-
-inline void RANDOMTRI(GLshort* p)
-{
-    for( uint16_t v = 0; v < numValues / 2; v++ )
-    {
-        p[v * 2 + 0] = (*pxDist)(randValue);
-        p[v * 2 + 1] = (*pyDist)(randValue);
-    }
-}
-
 uint measure(std::function<uint(uint)> fn)
 {
     uint m = 0;
@@ -166,14 +257,14 @@ uint measure(std::function<uint(uint)> fn)
 
 void texture(bool dump = false)
 {
-    auto G = u8_composeLong( glyphPtr );
+    auto G = u8_composeLong( u8Glyph );
     auto glyph_index = FT_Get_Char_Index( ftFace, G );
 
     FT_CALL( FT_Load_Glyph( ftFace, glyph_index, FT_LOAD_DEFAULT ) );
     FT_CALL( FT_Render_Glyph( ftFace->glyph, FT_RENDER_MODE_NORMAL ) );
 
-    glyphWidth = ftFace->glyph->bitmap.width;
-    glyphRows = ftFace->glyph->bitmap.rows;
+    glyphWidth = uint8_t(ftFace->glyph->bitmap.width);
+    glyphRows = uint8_t(ftFace->glyph->bitmap.rows);
     glyphMetrics = ftFace->glyph->metrics;
 
     // https://www.freetype.org/freetype2/docs/tutorial/step2.html
@@ -186,12 +277,6 @@ void texture(bool dump = false)
     glyphMetrics.vertBearingX /= 64;
     glyphMetrics.vertBearingY /= 64;
     glyphMetrics.vertAdvance /= 64;
-
-    if(pxDist) delete pxDist;
-    pxDist = new std::uniform_int_distribution<GLshort>(0, glyphWidth);
-
-    if(pyDist) delete pyDist;
-    pyDist = new std::uniform_int_distribution<GLshort>(0, glyphRows);
 
     struct Texel { GLubyte l, a; } texPixels[ texSize ]; // luminance & alpha
 
@@ -220,7 +305,7 @@ void texture(bool dump = false)
 
 void dumpGewelltGlyph(uint curPop)
 {
-    fprintf( pResultFile, "{ '%s', ", u8_composeString( glyphPtr ));
+    fprintf( pResultFile, "{ '%s', ", u8_composeString( u8Glyph ));
     putc('{', pResultFile);
     auto pMetrics = (FT_Pos*)&glyphMetrics;
     for(uint m = 0; m < 8; m++ ) fprintf( pResultFile, "%d,", int(pMetrics[m]) );
@@ -234,40 +319,29 @@ void dumpGewelltGlyph(uint curPop)
 //////////////////////////////////////
 
 static bool saverequest = false;
-static bool mutaterequest = false;
 
 void key(unsigned char c, int x, int y)
 {
     uint curPop = iteration & 1;
 
-    if(c=='r') // reset
-    {
-        currentMember = (popSize-1);
-        iteration = 0;
-    }
-
-    if(c=='m') // mutate
-    {
-        mutaterequest = true;
-    }
-
-    if(c=='s')
-    {
-        saverequest = true;
-    }
+    if(c=='r') currentMember = (popSize-1), iteration = 0; // reset
+    if(c=='s') saverequest = true; // save
 
     if(c=='S')
     {
-        snprintf(sprintfBuffer, sizeof(sprintfBuffer), "scrot \\%s.png -u", u8_composeString( glyphPtr ));
+        snprintf(sprintfBuffer, sizeof(sprintfBuffer), "scrot \\%s.png -u", u8_composeString( u8Glyph ));
         IGNORE_RESULT(system((const char*) sprintfBuffer));
+
+        // and to convert mp4 screen-cap into a gif use:
+        // ffmpeg -i digits-8tri.mp4 -pix_fmt rgb24 digits-8tri.gif
     }
 
     if(c=='n' || c=='S') // next
     {
         dumpGewelltGlyph( curPop );
 
-        glyphPtr += u8_charlength( glyphPtr );
-        if(*glyphPtr == '\0')
+        u8Glyph += u8_charlength( u8Glyph );
+        if(*u8Glyph == '\0') // endof glyph string? quit!
             c = 27;
         else
         {
@@ -279,14 +353,12 @@ void key(unsigned char c, int x, int y)
         }
     }
 
-    if(c == 27)
+    if(c == 27) // esc quits
     {
         glDeleteTextures( sizeof( glyphHandle ), &glyphHandle );
         FT_Done_Face( ftFace );
         FT_Done_FreeType( ftLibrary );
         delete[] pPop;
-        if(pxDist) delete pxDist;
-        if(pyDist) delete pyDist;
         fclose(pResultFile);
         exit( 0 );
     }
@@ -327,7 +399,7 @@ void display(void)
     // tris in alpha green
     glColor4f(0,1,0,.5f);
     glEnableClientState( GL_VERTEX_ARRAY );
-    glVertexPointer( 2, GL_SHORT, 0, &pPop[curPop].data[currentMember] );
+    glVertexPointer( 2, GL_SHORT, 0, &pPop[curPop].data[currentMember] ); // [currentMember] is current trial
     glDrawArrays(GL_TRIANGLES, 0, numPoints);
     glDisableClientState( GL_VERTEX_ARRAY );
 
@@ -351,7 +423,7 @@ void display(void)
     // tris in green
     glColor3f(0,1,0);
     glEnableClientState( GL_VERTEX_ARRAY );
-    glVertexPointer( 2, GL_SHORT, 0, &pPop[curPop].data[0] );
+    glVertexPointer( 2, GL_SHORT, 0, &pPop[curPop].data[0] ); // [0] is best
     glDrawArrays(GL_TRIANGLES, 0, numPoints);
     glDisableClientState( GL_VERTEX_ARRAY );
 
@@ -386,10 +458,10 @@ void idle()
     // check for seed-phase
     if(iteration==0 && currentMember==(popSize-1))
     {
-        for( uint16_t j = 0; j < popSize; j++ ) RANDOMTRI( (GLshort *) &pPop[0].data[j] );
-        for( uint16_t j = 0; j < popSize; j++ ) RANDOMTRI( (GLshort *) &pPop[1].data[j] );
-        for( uint16_t j = 0; j < popSize; j++ ) pPop[0].value[j] = 0;
-        for( uint16_t j = 0; j < popSize; j++ ) pPop[1].value[j] = 0;
+        for( uint16_t i = 0; i < popSize; i++ ) pPop[0].data[i].random();
+        for( uint16_t i = 0; i < popSize; i++ ) pPop[1].data[i].random();
+        for( uint16_t i = 0; i < popSize; i++ ) pPop[0].value[i] = 0;
+        for( uint16_t i = 0; i < popSize; i++ ) pPop[1].value[i] = 0;
     }
     else
     {
@@ -424,107 +496,57 @@ void idle()
     currentMember--;
 
     // check for breed-phase
-    if(currentMember == -1)
+    if( currentMember == std::numeric_limits<uint>::max() )
     {
         if(iteration % 10 == 0) printf("%3d: %d %d %d %d %d\n", iteration, blue, red, green_over_blue, green_over_green, badTri);
-        if(iteration == 500) { key('S',0,0); return; }
 
-        // isolate best
-        uint16_t bt = 0;
-        uint bv = 0;
-        {
-            for( uint16_t t = 0; t < popSize; t++ )
-            {
-                if( pPop[curPop].value[t] > bv )
-                    bv = pPop[curPop].value[bt = t];
-            }
-            auto pbt = (GLshort *) &pPop[curPop].data[bt];
-            auto p0 = (GLshort *) &pPop[curPop].data[0];
-            for( uint16_t v = 0; v < numValues; v++ ) p0[v] = pbt[v];
-        }
+        // in the absence of any real criteria, pick 200 as the limit
+        if(iteration == 200) { key('S',0,0); return; }
 
-        // clear best and clones
-        for(uint16_t t=0;t<popSize;t++)
-            if(pPop[curPop].value[t] == bv)
-                pPop[curPop].value[t] = 0;
+        uint16_t iBest;
+        uint vBest, vSumPlus1;
 
-        // sum and exp-value
-        uint sum = 0;
-        for(uint16_t t=0;t<popSize;t++)
-            sum += pPop[curPop].value[ t ];
-        uint sump1 = sum +1; // +1 will put % operator in range of [0,sum]
+        // scan current population to build stats
+        // this included clobbering clones of iBest to prevent saturation-breeding
+        pPop[curPop].scan( iBest, vBest, vSumPlus1 );
 
-        //////////////////////
-        // crossover & mutation
+        // copy best-valued member to [0], from where we will use it to breed
+        pPop[curPop].data[0].copy( pPop[curPop].data[iBest] );
 
-        auto fnCrossover = [&](uint16_t t0, uint s1, uint s2)
-        {
-            // pick and switch
-            uint16_t t1 = 0, t2 = 0;
-            for(uint16_t tt=0;tt<popSize;tt++)
-            {
-                if(s1 > 0) { s1 -= pPop[curPop].value[ tt ]; t1 = tt; }
-                if(s2 > 0) { s2 -= pPop[curPop].value[ tt ]; t2 = tt; }
-            }
-            if(randValue() & 1) std::swap( t1, t2 );
+        // preserve best into new population
+        pPop[newPop].data[0].copy( pPop[curPop].data[0] );
 
-            // copy
-            auto pt0 = (GLshort*) &pPop[newPop].data[t0];
-            auto pt1 = (GLshort*) &pPop[curPop].data[t1];
-            for( uint16_t v = 0; v < numValues; v++ ) pt0[v] = pt1[v];
+        const int parts = 6;
+        const int partN = popSize / parts;
+        int part0 = 1, part1 = partN;
 
-            // merge
-            auto pt2 = (GLshort*) &pPop[curPop].data[t2];
-            auto start = uint16_t(randValue() % numValues);
-            auto length = uint16_t(randValue() % (numValues - start));
-            for( uint16_t v = start; v < (start+length); v++ ) pt0[v] = pt2[v];
-        };
+        part0 += partN, part1 += partN;
+        for(int t=part0;t<part1;t++)
+            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).join();
 
-        // mutate curPop[0], the main source of the new population
-        if(mutaterequest)
-        {
-            mutaterequest = false;
+        for(int t=part0;t<part1;t++)
+            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 3, 5 ); // 3 adjustments of +/- 5
 
-            auto p = (GLshort*) &pPop[curPop].data[0];
-            for(uint16_t i=0;i<3; i++)
-                RANDPOS(p, uint( randValue() % numValues ) );
-        }
+        part0 += partN, part1 += partN;
+        for(int t=part0;t<part1;t++)
+            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 1, 5 );
 
-        // copy best
-        {
-            auto p0 = (GLshort*) &pPop[curPop].data[0];
-            auto p = (GLshort*) &pPop[newPop].data[0];
-            for( uint16_t v = 0; v < numValues; v++ ) p[v] = p0[v];
-        }
+        part0 += partN, part1 += partN;
+        for(int t=part0;t<part1;t++)
+            pPop[newPop].data[t].crossover(pPop[curPop], 0, uint(randValue() % vSumPlus1) );
 
-        // permute best
-        for(uint16_t t=1;t<popSize/4;t++)
-        {
-            auto p0 = (GLshort*) &pPop[curPop].data[0];
-            auto p = (GLshort*) &pPop[newPop].data[t];
-            for( uint16_t v = 0; v < numValues; v++ ) p[v] = p0[v];
-            for(uint16_t i=0;i<3; i++)
-                ADJPOS(p, uint(randValue() % numValues));
-        }
+        part0 += partN, part1 += partN;
+        for(int t=part0;t<part1;t++)
+            pPop[newPop].data[t].crossover(pPop[curPop], uint(randValue() % vSumPlus1), uint(randValue() % vSumPlus1) );
 
-        // breed best
-        for(uint16_t t=popSize/4;t<popSize/2;t++)
-            fnCrossover(t, 0, uint(randValue() % sump1) );
+        part0 += partN, part1 += partN;
+        for(int t=part0;t<part1;t++)
+            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 2 );
 
-        // breed others
-        for(uint16_t t=popSize/2;t<popSize*4/5;t++)
-            fnCrossover(t, uint(randValue() % sump1), uint(randValue() % sump1) );
-
-        // mutations
-        for(uint16_t m=1;m<popSize / 20;m++)
-        {
-            auto t = (randValue() % (popSize*4/5 -1)) +1; // -1 includes range end, +1 skips [0]
-            RANDPOS( (GLshort*) &pPop[newPop].data[t], uint(randValue() % numValues) );
-        }
-
-        // remainder are random
-        for(uint16_t t=popSize*4/5;t<popSize;t++)
-            RANDOMTRI( (GLshort *) &pPop[newPop].data[t] );
+        // mutations of non-random members
+        auto lastNonRnd = popSize*(parts-1)/parts;
+        for(int m=1;m<popSize / 20;m++)
+            pPop[newPop].data[ (randValue() % lastNonRnd -1) +1 ].adjust( 1, 5 ); // 1 adjustment of +/- 5
 
         currentMember = (popSize-1);
         iteration++;
@@ -545,7 +567,7 @@ int main(int argc, char **argv)
     srand((unsigned int)spec.tv_nsec);
 
     FT_CALL( FT_Init_FreeType( &ftLibrary ) );
-    FT_CALL( FT_New_Face( ftLibrary, "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", 0, &ftFace ) );
+    FT_CALL( FT_New_Face( ftLibrary, szFont, 0, &ftFace ) );
     FT_CALL( FT_Select_Charmap( ftFace, glyphCharmap) );
     FT_CALL( FT_Set_Pixel_Sizes( ftFace, 0, texDensity ) );
 
@@ -575,7 +597,8 @@ int main(int argc, char **argv)
     glutKeyboardFunc(key);
     glutIdleFunc(idle);
 
-    pResultFile = fopen("results.txt", "wa");
+    pResultFile = fopen("results.txt", "a+t");
+    fprintf( pResultFile, "#\n" );
 
     glutMainLoop();
 
