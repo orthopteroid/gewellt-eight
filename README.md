@@ -23,11 +23,11 @@ and the glyph offset information.
 { '5', {30,43,4,42,38,-15,4,51,}, {30,37,25,17,21,21,7,18,14,27,1,10,0,31,3,39,19,43,10,16,5,22,25,17,27,30,13,42,27,38,8,6,26,3,23,0,5,24,7,6,2,11,22,0,3,0,2,9,} }
 ```
 
-![digit](1.png)
-![digit](2.png)
-![digit](3.png)
-![digit](4.png)
-![digit](5.png)
+![digit](bin/1.png)
+![digit](bin/2.png)
+![digit](bin/3.png)
+![digit](bin/4.png)
+![digit](bin/5.png)
 
 # The Genetic Algorithim
 
