@@ -1,19 +1,33 @@
 # gewellt-eight
 
 'Gewellt' meaning 'wrinkly'... this code uses a genetic algorithim to optimize coverage of eight triangles
-onto a font glyph. The glyph is drawn onto an opengl texture which is then drawn onto a back buffer along with 
-the candidate coverage triangles. Alpha blending is used to determine coefficients for the objective function; a kind of
-poor-man's opencl. This approach creates 'wrinkly' but compact glyphs - about 56 bytes for an scalable opengl glyph.
+onto a freetype-rendered font glyph using very basic OpenGL. The approach creates scalable and compact glyphs,
+ though a bit 'wrinkly'. Eight triangles are used, hence the name.
 
-The genetic algorithm switches the weights on the objective function coefficients according to a simple
-schedule. Combined with some unique operators (like position adjustment) this appears to simulate an
-annealing or relaxation method.
+A freetype glyph-texture is drawn onto a back buffer along with alpha-blended candidate coverage triangles. The
+ resulting render buffer is color-sampled to measure metrics of triangle coverage. These metrics 
+are then used in the objective function to control breeding selection. As processing continues, the genetic
+ algorithm uses a simple iteration-based schedule to switch the
+ weights on the objective function coefficients. This approach
+  appears to perform annealing / relaxation on the triangle fitting. It all works like a poor-man's opencl.
 
 After 200 iterations, the drawing buffer is saved to a .png and the triangle positions are
-emmitted. With triangle coordinates being only byte-values this makes 48 bytes per glyph, plus the character code
-and the glyph offset information.
+emmitted. With triangle coordinates being only byte-values this makes 48 bytes per glyph. Character code
+and the glyph metric information add a few more bytes.
+
+While the process runs the left side are where triangle coverage is tested whereas the right side is there to show
+what the best coverage looks like. Here is a real-time video (taken from an old Core2 laptop) of some glyphs
+ being fitted:
 
 ![digit movie](https://github.com/orthopteroid/gewellt-eight/blob/master/digits-8tri.gif?raw=true "digit movie")
+
+The output after every glyph is a fixed-length structure comprising:
+
+* the character-code (which in this case is ascii, but gewellt should be utf8 compatible)
+* the freetype glyph metric information specifying dimensions, position and advance for horizontal and vertical layouts
+* the triangle data. The coordinates are made of unsigned bytes but by default gewellt only uses a 6-bit coordinate system.
+
+These are appended to a file:
 
 ```
 { '1', {31,42,4,42,38,-15,4,51,}, {17,33,31,41,0,41,0,11,0,7,4,11,21,28,14,34,14,12,8,11,8,11,18,10,1,11,2,6,1,8,0,8,13,4,7,11,19,0,11,0,20,26,7,0,17,0,11,0,} }
@@ -22,6 +36,8 @@ and the glyph offset information.
 { '4', {32,42,3,42,38,-16,4,51,}, {1,30,1,30,17,35,14,17,14,17,21,41,32,30,24,33,25,27,20,7,24,42,20,37,24,38,24,33,24,35,20,6,24,40,26,1,20,0,27,0,8,19,2,33,0,29,18,2,} }
 { '5', {30,43,4,42,38,-15,4,51,}, {30,37,25,17,21,21,7,18,14,27,1,10,0,31,3,39,19,43,10,16,5,22,25,17,27,30,13,42,27,38,8,6,26,3,23,0,5,24,7,6,2,11,22,0,3,0,2,9,} }
 ```
+
+Individually, these glyphs look like this:
 
 ![digit](bin/1.png)
 ![digit](bin/2.png)
