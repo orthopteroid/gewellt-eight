@@ -29,6 +29,11 @@ and the glyph offset information.
 ![digit](bin/4.png)
 ![digit](bin/5.png)
 
+The little test app here is a simple one line text editor with a small gewellt-built glyph-set. OpenGL rendering
+is done in 'immediate mode' style:
+
+![hello](hello-world.png)
+
 # The Genetic Algorithim
 
 The GA used has seven parts - each new generation is produced using the following steps:

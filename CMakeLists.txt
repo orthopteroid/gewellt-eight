@@ -1,5 +1,4 @@
 CMAKE_MINIMUM_REQUIRED( VERSION 3.10 )
-PROJECT( gewellt_eight )
 
 SET( CMAKE_CXX_STANDARD 11 )
 
@@ -12,6 +11,9 @@ SET( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti -Wall -fno-exceptions" )
 SET( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -g" )
 SET( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s -O3" )
 
+#########
+PROJECT( gewellt_eight )
+
 ADD_EXECUTABLE( gewellt_eight main.cpp )
 
 find_package(Freetype REQUIRED)
@@ -21,3 +23,15 @@ find_package(GLUT REQUIRED)
 include_directories( ${OPENGL_INCLUDE_DIRS}  ${GLUT_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIRS})
 
 target_link_libraries(gewellt_eight ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${FREETYPE_LIBRARIES})
+
+#########
+PROJECT( gewellt_eight_test )
+
+ADD_EXECUTABLE( gewellt_eight_test test.cpp )
+
+find_package(OpenGL REQUIRED)
+find_package(GLUT REQUIRED)
+
+include_directories( ${OPENGL_INCLUDE_DIRS}  ${GLUT_INCLUDE_DIRS})
+
+target_link_libraries(gewellt_eight_test ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
