@@ -1,31 +1,32 @@
 # gewellt-eight
 
-'Gewellt' meaning 'wrinkly'... this code uses a genetic algorithim to optimize coverage of eight triangles
-onto a freetype-rendered font glyph using very basic OpenGL. The approach creates scalable and compact glyphs,
- though a bit 'wrinkly'. Eight triangles are used, hence the name.
+'Gewellt' meaning 'wrinkly'... this code uses a genetic algorithim with OpenGL to optimize coverage of flat-shaded
+ triangles onto a freetype-rendered font glyph. The approach creates scalable, compact and somewhat
+ recognizable glyphs. Eight triangles are used, hence the name.
 
 A freetype glyph-texture is drawn onto a back buffer along with alpha-blended candidate coverage triangles. The
  resulting render buffer is color-sampled to measure metrics of triangle coverage. These metrics 
 are then used in the objective function to control breeding selection. As processing continues, the genetic
  algorithm uses a simple iteration-based schedule to switch the
- weights on the objective function coefficients. This approach
-  appears to perform annealing / relaxation on the triangle fitting. It all works like a poor-man's opencl.
+ weights on the objective function coefficients which performs an annealing / relaxation on the triangle fitting. The
+ texture
+ size is 64x64, so the triangle verts only use 6 bits for their position information. This makes the 24 verts that
+ make the triangles really only contain 36 bits per glyph. Glyph metric information
+ takes a few more bytes.
 
-After 200 iterations, the drawing buffer is saved to a .png and the triangle positions are
-emmitted. With triangle coordinates being only byte-values this makes 48 bytes per glyph. Character code
-and the glyph metric information add a few more bytes.
-
-While the process runs the left side are where triangle coverage is tested whereas the right side is there to show
-what the best coverage looks like. Here is a real-time video (taken from an old Core2 laptop) of some glyphs
- being fitted:
+Below is a clip of the process. The left side are where candidate triangle coverage is tested and on the right side
+ is where the best-so-far coverage is drawn. The code is set to only run 200 iterations per glyph and then save the
+  drawing buffer to a .png and
+  emmit the triangle positions. Here is a real-time video (taken from an old Core2 laptop) of
+  some glyphs being fitted:
 
 ![digit movie](images/digits-8tri.gif)
 
 The output after every glyph is a fixed-length structure comprising:
 
-* the character-code (which in this case is ascii, but gewellt should be utf8 compatible)
-* the freetype glyph metric information specifying dimensions, position and advance for horizontal and vertical layouts
-* the triangle data. The coordinates are made of unsigned bytes but by default gewellt only uses a 6-bit coordinate system.
+* the character-code (which I'm testing here in ascii, but gewellt plays fair with freetype to render utf8 glyphs)
+* the freetype glyph metric information ()specifying dimensions, position and advance for horizontal and vertical layouts)
+* the triangle data (gewellt only uses 64x64 glyph textures by default, so only a 6-bit coordinate system)
 
 These are appended to a file:
 
@@ -45,8 +46,9 @@ Individually, these glyphs look like this:
 ![digit](images/4.png)
 ![digit](images/5.png)
 
-The little test app here is a simple one line text editor with a small gewellt-built glyph-set. OpenGL rendering
-is done in 'immediate mode' style:
+Included in this repo is a simple single-line text editor demo that uses a limited gewellt-built glyph-set. OpenGL rendering of the
+triangles is done in 'immediate mode' style - faster rendering would be possible through writing text-to-be
+ rendered to a VBO:
 
 ![hello](images/hello-world.png)
 
@@ -76,3 +78,19 @@ a sampling of the drawing surface:
 The penalties for these terms are typically applied in decreasing weight (ie, red has the higest priority) but
 the code uses a schedule based upon the iteration count to swap the weights between the terms for periods
 of 10 iterations at a time - this appears to create most of the annealing effects you see in the above gif.
+
+# Future Directions
+
+The results appear to be pretty rough - with many gaps, some outstanding overlap and some dead triangles. Some post
+procesing could strip the dead triangles and possible link up nearby verticies (although there already is a 
+mutation operator that is supposed to have done that...).
+
+Other tricks might be to use 4 vert strips rather than just 3 very tris (effectively gaining an attached tri for
+ the cost of just one vert) or to make gaps less perceptable by using triangle shading (although then the objective
+ function might need some tweaking).
+
+# Thanks to...
+
+This project was inspired by
+ [Roger Johansson's blog post](https://rogerjohansson.blog/2008/12/07/genetic-programming-evolution-of-mona-lisa/)
+ concerning the triangularization of the Mona Lisa.
