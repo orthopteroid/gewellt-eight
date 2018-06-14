@@ -11,7 +11,7 @@ are then used in the objective function to control breeding selection. As proces
  weights on the objective function coefficients which performs an annealing / relaxation on the triangle fitting. The
  texture
  size is 64x64, so the triangle verts only use 6 bits for their position information. This makes the 24 verts that
- make the triangles really only contain 36 bits per glyph. Glyph metric information
+ make the triangles really only contain 36 bytes per glyph. Glyph metric information
  takes a few more bytes.
 
 Below is a clip of the process. The left side are where candidate triangle coverage is tested and on the right side
