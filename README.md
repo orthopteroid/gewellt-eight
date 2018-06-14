@@ -19,7 +19,7 @@ While the process runs the left side are where triangle coverage is tested where
 what the best coverage looks like. Here is a real-time video (taken from an old Core2 laptop) of some glyphs
  being fitted:
 
-![digit movie](https://github.com/orthopteroid/gewellt-eight/blob/master/digits-8tri.gif?raw=true "digit movie")
+![digit movie](images/digits-8tri.gif)
 
 The output after every glyph is a fixed-length structure comprising:
 
@@ -39,16 +39,16 @@ These are appended to a file:
 
 Individually, these glyphs look like this:
 
-![digit](bin/1.png)
-![digit](bin/2.png)
-![digit](bin/3.png)
-![digit](bin/4.png)
-![digit](bin/5.png)
+![digit](images/1.png)
+![digit](images/2.png)
+![digit](images/3.png)
+![digit](images/4.png)
+![digit](images/5.png)
 
 The little test app here is a simple one line text editor with a small gewellt-built glyph-set. OpenGL rendering
 is done in 'immediate mode' style:
 
-![hello](hello-world.png)
+![hello](images/hello-world.png)
 
 # The Genetic Algorithim
 

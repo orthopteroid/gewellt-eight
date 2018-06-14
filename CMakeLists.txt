@@ -12,9 +12,9 @@ SET( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG -g" )
 SET( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s -O3" )
 
 #########
-PROJECT( gewellt_eight )
+PROJECT( gewellt )
 
-ADD_EXECUTABLE( gewellt_eight main.cpp )
+ADD_EXECUTABLE( gewellt gewellt.cpp )
 
 find_package(Freetype REQUIRED)
 find_package(OpenGL REQUIRED)
@@ -22,16 +22,16 @@ find_package(GLUT REQUIRED)
 
 include_directories( ${OPENGL_INCLUDE_DIRS}  ${GLUT_INCLUDE_DIRS} ${FREETYPE_INCLUDE_DIRS})
 
-target_link_libraries(gewellt_eight ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${FREETYPE_LIBRARIES})
+target_link_libraries(gewellt ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${FREETYPE_LIBRARIES})
 
 #########
-PROJECT( gewellt_eight_test )
+PROJECT( demo_editor )
 
-ADD_EXECUTABLE( gewellt_eight_test test.cpp )
+ADD_EXECUTABLE( demo_editor demo-editor.cpp )
 
 find_package(OpenGL REQUIRED)
 find_package(GLUT REQUIRED)
 
 include_directories( ${OPENGL_INCLUDE_DIRS}  ${GLUT_INCLUDE_DIRS})
 
-target_link_libraries(gewellt_eight_test ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
+target_link_libraries(demo_editor ${OPENGL_LIBRARIES} ${GLUT_LIBRARY})
