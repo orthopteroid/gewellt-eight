@@ -31,7 +31,7 @@
 const int numTris = 8; // 8 tris, hence the name...
 const int popSize = 200;
 const char* szFont = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
-const uint8_t* u8zGlyphs = (uint8_t*)u8"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789.?!-#%";
+const uint8_t* u8zGlyphs = (uint8_t*)u8"!-./0123456789?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
 
 ////////////////////////////////////////////
@@ -484,9 +484,14 @@ void idle()
 
         // quick check for tris that share cords - and are likely zero size
         badTri = 0;
-        auto p = (GLshort*) &pPop[curPop].data[currentMember];
-        for( uint16_t v = 1; v < numValues; v++ )
-            badTri += (abs(p[v-1] - p[v]) < 2) ? 1 : 0;
+        struct xy { GLshort x, y; };
+        auto p = (xy*) &pPop[curPop].data[currentMember];
+        for( uint16_t t = 0; t < numTris; t++ )
+            badTri += (
+                          abs(p[t].x-p[t+1].x) * abs(p[t].y-p[t+1].y) < 2 ||
+                          abs(p[t].x-p[t+2].x) * abs(p[t].y-p[t+2].y) < 2 ||
+                          abs(p[t+1].x-p[t+2].x) * abs(p[t+1].y-p[t+2].y) < 2
+                      ) ? 1 : 0;
 
         uint penalities = a * red + b * green_over_blue + c * green_over_green + d * badTri;
         if( penalities > blue ) penalities = penalities >> 1;
