@@ -305,14 +305,13 @@ void texture(bool dump = false)
 
 void dumpGewelltGlyph(uint curPop)
 {
-    fprintf( pResultFile, "{ '%s', ", u8_composeString( u8Glyph ));
-    putc('{', pResultFile);
+    fprintf( pResultFile, ",{ '%s',    ", u8_composeString( u8Glyph ));
     auto pMetrics = (FT_Pos*)&glyphMetrics;
     for(uint m = 0; m < 8; m++ ) fprintf( pResultFile, "%d,", int(pMetrics[m]) );
-    fprintf( pResultFile, "}, {" );
+    fprintf( pResultFile, "    " );
     auto pValues = (GLshort *) &pPop[curPop].data[0];
     for( uint v = 0; v < numValues; v++ ) fprintf( pResultFile, "%d,", pValues[v] );
-    fprintf( pResultFile, "} }\n" );
+    fprintf( pResultFile, "}\n" );
     fflush(pResultFile);
 }
 
@@ -467,7 +466,7 @@ void idle()
     {
         // default objective function weights:
         // expose as much blue as possible while covering red and preventing triangle overlap
-        uint a = 5, b = 3, c = 2, d = 1;
+        uint a = 5, b = 7, c = 2, d = 1;
 
         // weight permutations allow annealing
         int batch = (iteration % 51) / 10; // [0,50] -> [0,5] in blocks of 10
