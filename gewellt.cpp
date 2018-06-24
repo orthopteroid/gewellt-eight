@@ -26,6 +26,7 @@
 #include <ft2build.h>
 #include <iostream>
 #include <random>
+#include <functional>
 #include FT_FREETYPE_H
 
 const int numTris = 8; // 8 tris, hence the name...
@@ -33,6 +34,8 @@ const int popSize = 200;
 
 // ending criteria
 const int maxIter = 200;
+const float coverageTarget = .05;
+
 const char* szFont = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
 const uint8_t* u8zGlyphs = (uint8_t*)u8"!-./0123456789?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
@@ -62,6 +65,8 @@ const int viewDensity = texDensity -1, viewSize = viewDensity * viewDensity;
 
 const int numPoints = numTris * 3;
 const int numValues = numPoints * 2;
+
+int pickPixel();
 
 struct Population; // fwd ref
 
@@ -100,13 +105,32 @@ struct Triangle
             t[i * 2 + 1] = std::min<GLshort>( std::max<GLshort>( t[i * 2 + 1] + qy, 0 ), glyphRows );
         }
     }
-    inline void random()
+    inline void random(int featureSize)
     {
+        uint8_t feaMin = 6, feaMax = feaMin + featureSize;
+
+        auto pp = pickPixel();
+        auto x = pp % texDensity;
+        auto y = texDensity - pp / texDensity; // top down
+
+        uint32_t r;
+        uint8_t rArr[6];
+        r = uint32_t(randValue()); // call reduction
+        rArr[0] = uint8_t(r);
+        rArr[1] = uint8_t(r)>>8;
+        rArr[2] = uint8_t(r>>16);
+        r = uint32_t(randValue()); // call reduction
+        rArr[3] = uint8_t(r);
+        rArr[4] = uint8_t(r>>8);
+        rArr[5] = uint8_t(r>>16);
+
+        int ri = 0;
         for( uint16_t i=0; i<3; i++)
         {
-            t[i * 2 + 0] = GLshort(randValue() % glyphWidth);
-            t[i * 2 + 1] = GLshort(randValue() % glyphRows);
+            t[i * 2 + 0] = x + GLshort(rArr[ri++] % ((feaMax - feaMin) * 2) - ((feaMax - feaMin) / 2));
+            t[i * 2 + 1] = y + GLshort(rArr[ri++] % ((feaMax - feaMin) * 2) - ((feaMax - feaMin) / 2));
         }
+
     }
 };
 struct TriangleSet
@@ -118,26 +142,11 @@ struct TriangleSet
         memcpy( ts, src.ts, sizeof(TriangleSet) );
         return *this;
     }
-    inline void merge(TriangleSet &src, uint8_t tsrc)
-    {
-        ts[tsrc].copy( src.ts[tsrc] );
-    }
-    inline void adjust(uint16_t n, uint16_t d) // adjust n points by +/- d
-    {
-        for(uint16_t i=0;i<n; i++) ts[randValue() % numTris].adjust( d );
-    }
-    inline void shift(uint16_t n, uint16_t d)
-    {
-        for(uint16_t i=0;i<n; i++) ts[randValue() % numTris].shift( d );
-    }
-    inline void random(uint16_t n)
-    {
-        for(uint16_t i=0;i<n; i++) ts[randValue() % numTris].random();
-    }
-    inline void random()
-    {
-        for(uint16_t i=0;i<numTris; i++) ts[i].random();
-    }
+    inline void merge(TriangleSet &src, uint8_t tsrc) { ts[tsrc].copy( src.ts[tsrc] ); }
+    inline void adjust(uint16_t d) { ts[randValue() % numTris].adjust( d ); }
+    inline void shift(uint16_t d) { ts[randValue() % numTris].shift( d ); }
+    inline void random(int featureSize) { ts[randValue() % numTris].random(featureSize); }
+    inline void randomize(int featureSize) { for(uint16_t i=0;i<numTris; i++) ts[i].random(featureSize); }
     inline void join()
     {
         auto r = uint32_t(randValue()); // call reduction
@@ -203,6 +212,10 @@ static GLubyte bufR[texSize];
 static GLubyte bufG[texSize];
 static GLubyte bufB[texSize];
 
+static GLubyte bufR_picker[texSize];
+static uint sumPicker = 0;
+static int totalRed = 0;
+
 // statistics
 uint blue; // background
 uint red; // glyph
@@ -218,7 +231,7 @@ static uint8_t* u8Glyph = (uint8_t*)u8zGlyphs; // pointer to next utf8 char
 static char sprintfBuffer[80];
 static char utf8Buffer[4 +1]; // +1 for \0, static is not threadsafe
 
-uint currentMember = 0;
+uint currentMember = popSize-1;
 uint iteration = 0;
 FILE *pResultFile = 0;
 
@@ -257,6 +270,17 @@ FT_ULong u8_composeLong(uint8_t* ptr)
 }
 
 //////////////////////
+
+int pickPixel()
+{
+    if(sumPicker == 0)
+        return randValue() % viewSize;
+
+    auto r = randValue() % sumPicker +1; // +1 for cover (1,N)
+    int i = 0;
+    while( r > 0 && i++<texSize) { if(bufR_picker[i] > 0) r--; } // review: ++ in conditional!
+    return i;
+}
 
 uint measure(std::function<uint(uint)> fn)
 {
@@ -401,8 +425,10 @@ void display(void)
     {
         glFlush();
         ::glReadPixels( 0, 0, texDensity-1, texDensity-1, GL_BLUE, GL_UNSIGNED_BYTE, bufB );
+        ::glReadPixels( 0, 0, texDensity-1, texDensity-1, GL_RED, GL_UNSIGNED_BYTE, bufR );
 
         blue = measure([&](uint i) { return bufB[i] > 0 ? 1 : 0; } );
+        totalRed = measure([&](uint i) { return bufR[i] > 0 ? 1 : 0; } );
     }
 
     const float greenAlpha = .25;
@@ -452,6 +478,10 @@ void display(void)
     green_over_green = measure([&](uint i) { return bufG[i] > uint(greenAlpha * 255.f) +5 ? 1 : 0; } );
     green_over_blue = measure([&](uint i) { return (bufG[i] & bufB[i]) ? 1 : 0; } );
 
+    // update the feature positioning seed
+    ::glReadPixels( 0, 0, texDensity-1, texDensity-1, GL_RED, GL_UNSIGNED_BYTE, bufR_picker );
+    sumPicker = measure([&](uint i) { return bufR_picker[i] > 0 ? 1 : 0; } );
+
     // save after drawing of 'best'
     if(saverequest && currentMember == 0)
     {
@@ -469,8 +499,8 @@ void idle()
     // check for seed-phase
     if(iteration==0 && currentMember==(popSize-1))
     {
-        for( uint16_t i = 0; i < popSize; i++ ) pPop[0].data[i].random();
-        for( uint16_t i = 0; i < popSize; i++ ) pPop[1].data[i].random();
+        for( uint16_t i = 0; i < popSize; i++ ) pPop[0].data[i].randomize( 8 );
+        for( uint16_t i = 0; i < popSize; i++ ) pPop[1].data[i].randomize( 8 );
         for( uint16_t i = 0; i < popSize; i++ ) pPop[0].value[i] = 0;
         for( uint16_t i = 0; i < popSize; i++ ) pPop[1].value[i] = 0;
     }
@@ -519,10 +549,18 @@ void idle()
     // check for breed-phase
     if( currentMember == std::numeric_limits<uint>::max() )
     {
-        if(iteration % 10 == 0) printf("%3d: %d %d %d %d %d\n", iteration, blue, red, green_over_blue, green_over_green, badTri);
+        auto coverage = float(red) / float(totalRed);
 
-        // in the absence of any real criteria, pick 200 as the limit
-        if(iteration == 200) { key('S',0,0); return; }
+        if(iteration % 10 == 0) printf("%3d: %d %d %d %d %d -> %1.8f\n", iteration, blue, red, green_over_blue, green_over_green, smallFeature, coverage );
+
+        if(
+            (
+                (coverage < coverageTarget || red < 10) &&
+                red * green_over_blue < 100
+            ) ||
+            iteration == maxIter
+        )
+        { key('S',0,0); return; }
 
         uint16_t iBest;
         uint vBest, vSumPlus1;
@@ -537,37 +575,57 @@ void idle()
         // preserve best into new population
         pPop[newPop].data[0].copy( pPop[curPop].data[0] );
 
-        const int parts = 6;
-        const int partN = popSize / parts;
-        int part0 = 1, part1 = partN;
+        if(coverage > coverageTarget * 2 && iteration < maxIter * 1 / 10)
+        {
+            const int parts = 7;
+            const int partN = popSize / parts;
+            int part0 = 1, part1 = partN;
 
-        part0 += partN, part1 += partN;
-        for(int t=part0;t<part1;t++)
-            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).join();
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).join();
 
-        for(int t=part0;t<part1;t++)
-            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 3, 5 ); // 3 adjustments of +/- 5
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 5 );
 
-        part0 += partN, part1 += partN;
-        for(int t=part0;t<part1;t++)
-            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 1, 5 );
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 5 );
 
-        part0 += partN, part1 += partN;
-        for(int t=part0;t<part1;t++)
-            pPop[newPop].data[t].crossover(pPop[curPop], 0, uint(randValue() % vSumPlus1) );
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 8 );
 
-        part0 += partN, part1 += partN;
-        for(int t=part0;t<part1;t++)
-            pPop[newPop].data[t].crossover(pPop[curPop], uint(randValue() % vSumPlus1), uint(randValue() % vSumPlus1) );
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].crossover(pPop[curPop], 0, uint(randValue() % vSumPlus1) );
 
-        part0 += partN, part1 += partN;
-        for(int t=part0;t<part1;t++)
-            pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 2 );
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].crossover(pPop[curPop], uint(randValue() % vSumPlus1), uint(randValue() % vSumPlus1) );
 
-        // mutations of non-random members
-        auto lastNonRnd = popSize*(parts-1)/parts;
-        for(int m=1;m<popSize / 20;m++)
-            pPop[newPop].data[ (randValue() % lastNonRnd -1) +1 ].adjust( 1, 5 ); // 1 adjustment of +/- 5
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].randomize( 8 );
+        }
+        else
+        {
+            // finishing phase: minor position tweaking
+            const int parts = 3;
+            const int partN = popSize / parts;
+            int part0 = 1, part1 = partN;
+
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 2 );
+
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 2 );
+
+            part0 += partN, part1 += partN;
+            for(int t=part0;t<part1;t++)
+                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 4 );
+        }
 
         currentMember = (popSize-1);
         iteration++;
@@ -615,6 +673,8 @@ int main(int argc, char **argv)
     texture();
 
     glutDisplayFunc(display);
+    glutPostRedisplay();
+
     glutKeyboardFunc(key);
     glutIdleFunc(idle);
 
