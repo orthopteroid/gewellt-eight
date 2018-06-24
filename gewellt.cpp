@@ -30,6 +30,9 @@
 
 const int numTris = 8; // 8 tris, hence the name...
 const int popSize = 200;
+
+// ending criteria
+const int maxIter = 200;
 const char* szFont = "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf";
 const uint8_t* u8zGlyphs = (uint8_t*)u8"!-./0123456789?ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const FT_Encoding glyphCharmap = FT_ENCODING_UNICODE;
@@ -73,16 +76,23 @@ struct Triangle
     }
     inline void adjust(uint16_t d)
     {
+        auto r = uint32_t(randValue()); // call reduction
+        auto r8 = r >> 8;
+        auto r16 = r >> 16;
+
         auto d2p1 = d * 2 + 1;
-        auto ic = randValue() % 3;
-        t[ic*2+0] = std::min<GLshort>( std::max<GLshort>( t[ic*2+0] + randValue() % d2p1 - d, 0 ), glyphWidth );
-        t[ic*2+1] = std::min<GLshort>( std::max<GLshort>( t[ic*2+1] + randValue() % d2p1 - d, 0 ), glyphRows );
+        auto ic = r % 3;
+        t[ic*2+0] = std::min<GLshort>( std::max<GLshort>( t[ic*2+0] + r8 % d2p1 - d, 0 ), glyphWidth );
+        t[ic*2+1] = std::min<GLshort>( std::max<GLshort>( t[ic*2+1] + r16 % d2p1 - d, 0 ), glyphRows );
     }
     inline void shift(uint16_t d)
     {
+        auto r = uint32_t(randValue()); // call reduction
+        auto r8 = r >> 8;
+
         auto d2p1 = d * 2 + 1;
-        auto qx = randValue() % d2p1 - d;
-        auto qy = randValue() % d2p1 - d;
+        auto qx = r % d2p1 - d;
+        auto qy = r8 % d2p1 - d;
 
         for( uint16_t i=0; i<3; i++)
         {
@@ -130,7 +140,7 @@ struct TriangleSet
     }
     inline void join()
     {
-        uint32_t r = uint32_t(randValue()); // call reduction
+        auto r = uint32_t(randValue()); // call reduction
         auto t1 = r % numTris;
         auto t2 = (r >> 8) % numTris;
         auto v1 = (r >> 16) % 3; // [0,2]
@@ -199,7 +209,7 @@ uint red; // glyph
 uint green; // triangle output
 uint green_over_blue; // unnecessary triangle output on background
 uint green_over_green; // unnecessary multi-layered triangle output
-uint badTri;
+uint smallFeature;
 
 ///////////////////////////////////
 // state vars
@@ -466,35 +476,40 @@ void idle()
     }
     else
     {
-        // default objective function weights:
-        // expose as much blue as possible while covering red and preventing triangle overlap
-        uint a = 5, b = 7, c = 2, d = 1;
-
-        // weight permutations allow annealing
-        int batch = (iteration % 51) / 10; // [0,50] -> [0,5] in blocks of 10
-        switch( batch )
-        {
-            case 0: std::swap(b,d); break; // perfer 'better triangles' to background coverage -> inflate
-            case 1: std::swap(a,b); break; // prefer background coverage to glyph coverage -> deflate
-            // gap
-            case 3: std::swap(a,d); break; // perfer 'better triangles' to glyph coverage -> inflate
-            case 4: std::swap(a,c); break; // perfer less triangle overlap to glyph coverage -> deflate
-            // gap
-            default: ;
-        }
-
         // quick check for tris that share cords - and are likely zero size
-        badTri = 0;
+        const int smallSize = 3;
+        smallFeature = 0;
         struct xy { GLshort x, y; };
         auto p = (xy*) &pPop[curPop].data[currentMember];
         for( uint16_t t = 0; t < numTris; t++ )
-            badTri += (
-                          abs(p[t].x-p[t+1].x) * abs(p[t].y-p[t+1].y) < 2 ||
-                          abs(p[t].x-p[t+2].x) * abs(p[t].y-p[t+2].y) < 2 ||
-                          abs(p[t+1].x-p[t+2].x) * abs(p[t+1].y-p[t+2].y) < 2
+            smallFeature += (
+                      abs(p[t].x-p[t+1].x) * abs(p[t].y-p[t+1].y) < smallSize ||
+                      abs(p[t].x-p[t+2].x) * abs(p[t].y-p[t+2].y) < smallSize ||
+                      abs(p[t+1].x-p[t+2].x) * abs(p[t+1].y-p[t+2].y) < smallSize
                       ) ? 1 : 0;
 
-        uint penalities = a * red + b * green_over_blue + c * green_over_green + d * badTri;
+        // default objective function weights:
+        // expose as much blue as possible while covering red and preventing triangle overlap
+        uint a = 5, b = 3, c = 2, d = 1;
+
+        if( iteration < maxIter * 1 / 10 )
+        {
+            // weight permutations allow annealing
+            int batch = (iteration % 41) / 20; // [0,40] -> [0,2] in blocks of 20
+            switch( batch )
+            {
+                default: break;
+                case 1: std::swap(a,c); break; // perfer less triangle overlap to glyph coverage -> deflate
+                case 2: std::swap(a,b); break; // prefer background coverage to glyph coverage -> inflate
+            }
+        }
+        else
+        {
+            // finishing phase: small feature elimination
+            a = 5, b = 2, c = 0, d = 5;
+        }
+
+        uint penalities = a * red + b * green_over_blue + c * green_over_green + d * smallFeature;
         if( penalities > blue ) penalities = penalities >> 1;
         pPop[curPop].value[currentMember] = blue - penalities;
     }
