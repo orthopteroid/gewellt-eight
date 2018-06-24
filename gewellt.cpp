@@ -189,9 +189,9 @@ void TriangleSet::crossover(Population& src, uint ms1, uint ms2)
 // objective function state
 
 // samplers
-static GLubyte bufR[viewSize];
-static GLubyte bufG[viewSize];
-static GLubyte bufB[viewSize];
+static GLubyte bufR[texSize];
+static GLubyte bufG[texSize];
+static GLubyte bufB[texSize];
 
 // statistics
 uint blue; // background
@@ -251,7 +251,7 @@ FT_ULong u8_composeLong(uint8_t* ptr)
 uint measure(std::function<uint(uint)> fn)
 {
     uint m = 0;
-    for(uint i=0;i<viewSize;i++) m += fn(i);
+    for(uint i=0;i<texSize;i++) m += fn(i);
     return m;
 }
 
@@ -329,7 +329,7 @@ void key(unsigned char c, int x, int y)
     if(c=='S')
     {
         snprintf(sprintfBuffer, sizeof(sprintfBuffer), "scrot \\%s.png -u", u8_composeString( u8Glyph ));
-        IGNORE_RESULT(system((const char*) sprintfBuffer));
+        //IGNORE_RESULT(system((const char*) sprintfBuffer));
 
         // and to convert mp4 screen-cap into a gif use:
         // ffmpeg -i digits-8tri.mp4 -pix_fmt rgb24 digits-8tri.gif
@@ -390,13 +390,15 @@ void display(void)
     if(currentMember==(popSize-1))
     {
         glFlush();
-        ::glReadPixels( 0, 0, viewDensity-1, viewDensity-1, GL_BLUE, GL_UNSIGNED_BYTE, bufB );
+        ::glReadPixels( 0, 0, texDensity-1, texDensity-1, GL_BLUE, GL_UNSIGNED_BYTE, bufB );
 
         blue = measure([&](uint i) { return bufB[i] > 0 ? 1 : 0; } );
     }
 
+    const float greenAlpha = .25;
+
     // tris in alpha green
-    glColor4f(0,1,0,.5f);
+    glColor4f(0,1,0,.25f);
     glEnableClientState( GL_VERTEX_ARRAY );
     glVertexPointer( 2, GL_SHORT, 0, &pPop[curPop].data[currentMember] ); // [currentMember] is current trial
     glDrawArrays(GL_TRIANGLES, 0, numPoints);
@@ -432,12 +434,12 @@ void display(void)
     // sample
 
     glFlush();
-    ::glReadPixels( 0, 0, viewDensity-1, viewDensity-1, GL_RED, GL_UNSIGNED_BYTE, bufR );
-    ::glReadPixels( 0, 0, viewDensity-1, viewDensity-1, GL_GREEN, GL_UNSIGNED_BYTE, bufG );
+    ::glReadPixels( 0, 0, texDensity-1, texDensity-1, GL_RED, GL_UNSIGNED_BYTE, bufR );
+    ::glReadPixels( 0, 0, texDensity-1, texDensity-1, GL_GREEN, GL_UNSIGNED_BYTE, bufG );
 
     red = measure([&](uint i) { return bufR[i] > 250 ? 1 : 0; } );
     green = measure([&](uint i) { return bufG[i] > 0 ? 1 : 0; } );
-    green_over_green = measure([&](uint i) { return bufG[i] > 180 ? 1 : 0; } ); // 180 is > 50%
+    green_over_green = measure([&](uint i) { return bufG[i] > uint(greenAlpha * 255.f) +5 ? 1 : 0; } );
     green_over_blue = measure([&](uint i) { return (bufG[i] & bufB[i]) ? 1 : 0; } );
 
     // save after drawing of 'best'
