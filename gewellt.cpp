@@ -117,7 +117,7 @@ struct Triangle
         uint8_t rArr[6];
         r = uint32_t(randValue()); // call reduction
         rArr[0] = uint8_t(r);
-        rArr[1] = uint8_t(r)>>8;
+        rArr[1] = uint8_t(r>>8);
         rArr[2] = uint8_t(r>>16);
         r = uint32_t(randValue()); // call reduction
         rArr[3] = uint8_t(r);
