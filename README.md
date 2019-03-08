@@ -73,7 +73,7 @@ a sampling of the drawing surface:
 * red - the amount of glyph still showing
 * green_over_blue - the amount of unnecessary triangle coverage on the background
 * green_over_green - the amount of overlapping triangles (only possible because we use alpha to draw triangles)
-* badTri - the number of triangles that fail a simple size-test by being too small
+* smallFeature - the number of triangles that fail a simple size-test by being too small
 
 The penalties for these terms are typically applied in decreasing weight (ie, red has the higest priority) but
 the code uses a schedule based upon the iteration count to swap the weights between the terms for periods
