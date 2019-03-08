@@ -23,7 +23,7 @@
 #include <vector>
 #include <memory>
 
-#include <ft2build.h>
+#include <freetype2/ft2build.h>
 #include <iostream>
 #include <random>
 #include <functional>
