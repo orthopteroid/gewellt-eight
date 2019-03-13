@@ -577,54 +577,32 @@ void idle()
 
         if(coverage > coverageTarget * 2 && iteration < maxIter * 1 / 10)
         {
-            const int parts = 7;
-            const int partN = popSize / parts;
-            int part0 = 1, part1 = partN;
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).join();
-
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 5 );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 5 );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 8 );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].crossover(pPop[curPop], 0, uint(randValue() % vSumPlus1) );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].crossover(pPop[curPop], uint(randValue() % vSumPlus1), uint(randValue() % vSumPlus1) );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].randomize( 8 );
+            for(int t=0;t<popSize;t++)
+            {
+                switch(t & 0b111)
+                {
+                    case 0: pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 8 ); break;
+                    case 1: pPop[newPop].data[t].randomize( 8 );
+                    case 2: pPop[newPop].data[t].crossover(pPop[curPop], 0, uint(randValue() % vSumPlus1) ); break;
+                    case 3: pPop[newPop].data[t].crossover(pPop[curPop], uint(randValue() % vSumPlus1), uint(randValue() % vSumPlus1) ); break;
+                    case 4: pPop[newPop].data[t].copy( pPop[curPop].data[0] ).join(); break;
+                    case 5: pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 5 ); break;
+                    default: pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 5 ); break;
+                }
+            }
         }
         else
         {
             // finishing phase: minor position tweaking
-            const int parts = 3;
-            const int partN = popSize / parts;
-            int part0 = 1, part1 = partN;
-
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).adjust( 2 );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).shift( 2 );
-
-            part0 += partN, part1 += partN;
-            for(int t=part0;t<part1;t++)
-                pPop[newPop].data[t].copy( pPop[curPop].data[0] ).random( 4 );
+            for(int t=1;t<popSize;t++)
+            {
+                switch(t & 0b11)
+                {
+                    case 0: pPop[newPop].data[t].copy(pPop[curPop].data[0]).random(4); break;
+                    case 1: pPop[newPop].data[t].copy(pPop[curPop].data[0]).adjust(2); break;
+                    default: pPop[newPop].data[t].copy(pPop[curPop].data[0]).shift(2);
+                }
+            }
         }
 
         currentMember = (popSize-1);
